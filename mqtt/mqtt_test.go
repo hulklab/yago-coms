@@ -1,7 +1,6 @@
 package mqtt
 
 import (
-	"github.com/hulklab/yago/libs/logger"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,7 +11,6 @@ import (
 
 func TestPub(t *testing.T) {
 	// 注意， pub 和 sub 不同使用同一个 mqtt 实例
-	logger.Ins().Info("PUB HERE")
 	err := Ins().Pub("event_topic", "hello,world", 0)
 	t.Log(err)
 }
@@ -23,7 +21,7 @@ func TestSub(t *testing.T) {
 	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
 
 	err := Ins().Sub("event_topic", 0, func(value string) {
-		logger.Ins().Info(value, "here")
+		t.Log(value, "here")
 	})
 
 	if err != nil {
