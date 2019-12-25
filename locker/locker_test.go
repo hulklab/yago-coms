@@ -10,7 +10,7 @@ import (
 	"github.com/hulklab/yago"
 )
 
-// go test -v . -test.run TestRedis
+// go test -v . -args "-c=${APP_PATH}/app.toml"
 
 func TestRedis(t *testing.T) {
 	yago.Config.Set("locker", g.Hash{
@@ -21,27 +21,64 @@ func TestRedis(t *testing.T) {
 		"addr": "127.0.0.1:6379",
 	})
 
+	doTest()
+}
+
+func doTest() {
 	key := "lock_test"
 
-	r1 := Ins("locker")
 	go func() {
-		r1.Lock(key, 10)
-		defer r1.Unlock(key)
+		r1 := New()
+		err := r1.Lock(key, 5)
+		if err != nil {
+			fmt.Println("get lock in fun1 err", err.Error())
+			return
+		}
+		defer r1.Unlock()
 		fmt.Println("get lock in fun1")
+		for i := 0; i < 10; i++ {
+			fmt.Println("fun1:", i)
+			time.Sleep(1 * time.Second)
+		}
 	}()
 
 	go func() {
-		r1.Lock(key, 10)
-		defer r1.Unlock(key)
+		r2 := New()
+		err := r2.Lock(key, 5)
+		if err != nil {
+			fmt.Println("get lock in fun2 err", err.Error())
+			return
+		}
+		defer r2.Unlock()
 		fmt.Println("get lock in fun2")
+		for i := 0; i < 10; i++ {
+			fmt.Println("fun2:", i)
+			time.Sleep(1 * time.Second)
+		}
 	}()
 
-	for i := 0; i < 13; i++ {
-		fmt.Println(i)
-		time.Sleep(1 * time.Second)
+	time.Sleep(12 * time.Second)
+
+	r3 := New()
+	err := r3.Lock(key, 10)
+	if err != nil {
+		fmt.Println("get lock in fun3 err:", err.Error())
+		return
 	}
-	r1.Unlock(key)
-	r1.Lock(key, 10)
+
 	fmt.Println("get lock in fun3")
-	r1.Unlock(key)
+	r3.Unlock()
+
+}
+
+func TestEtcd(t *testing.T) {
+	yago.Config.Set("locker", g.Hash{
+		"driver":             "etcd",
+		"driver_instance_id": "etcd",
+	})
+	yago.Config.Set("etcd", g.Hash{
+		"endpoints": []string{"127.0.0.1:2379"},
+	})
+
+	doTest()
 }
