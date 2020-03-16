@@ -3,18 +3,13 @@ package locker
 import (
 	"log"
 
-	"github.com/hulklab/yago/coms/etcd"
+	"github.com/hulklab/yago-coms/locker/lock"
 
 	"github.com/hulklab/yago"
-	"github.com/hulklab/yago/coms/rds"
+	_ "github.com/hulklab/yago-coms/locker/redis"
 )
 
-type ILocker interface {
-	Lock(key string, timeout int64) error
-	Unlock()
-}
-
-func New(id ...string) ILocker {
+func New(id ...string) lock.ILocker {
 	var name string
 
 	if len(id) == 0 {
@@ -25,35 +20,15 @@ func New(id ...string) ILocker {
 
 	driver := yago.Config.GetString(name + ".driver")
 	driverInsId := yago.Config.GetString(name + ".driver_instance_id")
-	retry := yago.Config.GetInt(name + ".retry")
-	if retry == 0 {
-		retry = 3
+
+	if len(driverInsId) == 0 {
+		log.Fatalln("driver_id is required in locker config")
 	}
 
-	var val ILocker
-	if driver == "redis" {
-		if len(driverInsId) == 0 {
-			log.Fatalln("driver_id is required in locker config")
-		}
-
-		rIns := rds.Ins(driverInsId)
-		val = &redisLock{
-			rIns:  rIns,
-			retry: retry,
-		}
-	} else if driver == "etcd" {
-		if len(driverInsId) == 0 {
-			log.Fatalln("driver_id is required in locker config")
-		}
-
-		eIns := etcd.Ins(driverInsId)
-		val = &etcdLock{
-			eIns:  eIns,
-			retry: retry,
-		}
-	} else {
-		log.Fatalf("unsupport driver %s", driver)
+	newFunc, b := lock.LoadLocker(driver)
+	if !b {
+		log.Fatalf("unsupport driver %s, or driver is not register yet", driver)
 	}
 
-	return val
+	return newFunc(name)
 }

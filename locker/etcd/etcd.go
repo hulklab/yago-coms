@@ -1,4 +1,4 @@
-package locker
+package etcd
 
 import (
 	"context"
@@ -6,9 +6,32 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hulklab/yago"
+	"github.com/hulklab/yago-coms/locker/lock"
+
 	"github.com/hulklab/yago/coms/etcd"
 	"go.etcd.io/etcd/clientv3/concurrency"
 )
+
+func init() {
+	lock.RegisterLocker("etcd", func(name string) lock.ILocker {
+		//driver := yago.Config.GetString(name + ".driver")
+
+		driverInsId := yago.Config.GetString(name + ".driver_instance_id")
+		retry := yago.Config.GetInt(name + ".retry")
+		if retry == 0 {
+			retry = 3
+		}
+		eIns := etcd.Ins(driverInsId)
+		val := &etcdLock{
+			eIns:  eIns,
+			retry: retry,
+		}
+
+		return val
+	})
+
+}
 
 type etcdLock struct {
 	eIns  *etcd.Etcd

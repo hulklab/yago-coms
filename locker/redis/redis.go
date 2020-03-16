@@ -1,10 +1,13 @@
-package locker
+package redis
 
 import (
 	"log"
 	"time"
 
+	"github.com/hulklab/yago-coms/locker/lock"
+
 	"github.com/garyburd/redigo/redis"
+	"github.com/hulklab/yago"
 	"github.com/hulklab/yago/coms/rds"
 )
 
@@ -13,6 +16,22 @@ type redisLock struct {
 	retry   int
 	key     string
 	expired int64
+}
+
+func init() {
+	lock.RegisterLocker("redis", func(name string) lock.ILocker {
+		driverInsId := yago.Config.GetString(name + ".driver_instance_id")
+		retry := yago.Config.GetInt(name + ".retry")
+		if retry == 0 {
+			retry = 3
+		}
+		rIns := rds.Ins(driverInsId)
+		val := &redisLock{
+			rIns:  rIns,
+			retry: retry,
+		}
+		return val
+	})
 }
 
 func (r *redisLock) Lock(key string, timeout int64) error {

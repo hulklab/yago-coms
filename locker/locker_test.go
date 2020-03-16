@@ -8,6 +8,8 @@ import (
 	"github.com/hulklab/yago/example/app/g"
 
 	"github.com/hulklab/yago"
+	// un-comment before test
+	_ "github.com/hulklab/yago-coms/locker/etcd"
 )
 
 // go test -v . -args "-c=${APP_PATH}/app.toml"
