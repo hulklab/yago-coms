@@ -7,7 +7,8 @@ import (
 const DefaultSessionTTL = 60
 
 type SessionOptions struct {
-	TTL int64
+	TTL              int64
+	DisableKeepAlive bool
 }
 
 // SessionOption configures Session.
@@ -22,11 +23,16 @@ func WithTTL(ttl int64) SessionOption {
 	}
 }
 
+func WithDisableKeepAlive() SessionOption {
+	return func(so *SessionOptions) {
+		so.DisableKeepAlive = true
+	}
+}
+
 var locks sync.Map
 
 type ILocker interface {
-	Lock(key string, timeout int64) error
-	LockForever(key string, opts ...SessionOption) error
+	Lock(key string, opts ...SessionOption) error
 	Unlock()
 }
 

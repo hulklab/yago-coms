@@ -42,7 +42,7 @@ type etcdLock struct {
 	mutex *concurrency.Mutex
 }
 
-func (e *etcdLock) LockForever(key string, opts ...lock.SessionOption) error {
+func (e *etcdLock) Lock(key string, opts ...lock.SessionOption) error {
 	e.ctx = context.Background()
 	ops := &lock.SessionOptions{TTL: lock.DefaultSessionTTL}
 	for _, opt := range opts {
@@ -64,19 +64,12 @@ func (e *etcdLock) LockForever(key string, opts ...lock.SessionOption) error {
 		return err
 	}
 
-	return nil
-}
-
-func (e *etcdLock) Lock(key string, timeout int64) error {
-	err := e.LockForever(key, lock.WithTTL(timeout))
-	if err != nil {
-		return err
+	if ops.DisableKeepAlive {
+		go func() {
+			<-time.After(time.Duration(ops.TTL) * time.Second)
+			e.Unlock()
+		}()
 	}
-
-	go func() {
-		<-time.After(time.Duration(timeout) * time.Second)
-		e.Unlock()
-	}()
 	return nil
 }
 

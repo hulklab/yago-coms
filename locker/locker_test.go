@@ -45,7 +45,7 @@ func doTest() {
 
 	go func() {
 		r1 := New()
-		err := r1.Lock(key, 5)
+		err := r1.Lock(key, lock.WithTTL(5), lock.WithDisableKeepAlive())
 		if err != nil {
 			fmt.Println("get lock in fun1 err", err.Error())
 			return
@@ -60,7 +60,7 @@ func doTest() {
 
 	go func() {
 		r2 := New()
-		err := r2.Lock(key, 5)
+		err := r2.Lock(key, lock.WithTTL(5), lock.WithDisableKeepAlive())
 		if err != nil {
 			fmt.Println("get lock in fun2 err", err.Error())
 			return
@@ -76,7 +76,7 @@ func doTest() {
 	time.Sleep(12 * time.Second)
 
 	r3 := New()
-	err := r3.Lock(key, 10)
+	err := r3.Lock(key, lock.WithTTL(10))
 	if err != nil {
 		fmt.Println("get lock in fun3 err:", err.Error())
 		return
@@ -92,7 +92,7 @@ func doTestForever() {
 
 	go func() {
 		r1 := New()
-		err := r1.LockForever(key, lock.WithTTL(1))
+		err := r1.Lock(key, lock.WithTTL(1))
 		if err != nil {
 			fmt.Println("get lock in fun1 err", err.Error())
 			return
@@ -105,9 +105,9 @@ func doTestForever() {
 		}
 	}()
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(2 * time.Second)
 	r2 := New()
-	err := r2.LockForever(key, lock.WithTTL(10))
+	err := r2.Lock(key, lock.WithTTL(10))
 	if err != nil {
 		fmt.Println("get forever lock in fun2 err:", err.Error())
 		return

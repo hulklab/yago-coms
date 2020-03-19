@@ -66,35 +66,28 @@ func (r *redisLock) autoRenewal(ttl int64) {
 
 }
 
-func (r *redisLock) LockForever(key string, opts ...lock.SessionOption) error {
+func (r *redisLock) Lock(key string, opts ...lock.SessionOption) error {
 	ops := &lock.SessionOptions{TTL: lock.DefaultSessionTTL}
 	for _, opt := range opts {
 		opt(ops)
 	}
-	err := r.Lock(key, ops.TTL)
-	if err != nil {
-		return err
-	}
 
-	r.autoRenewal(ops.TTL)
-
-	return nil
-
-}
-
-func (r *redisLock) Lock(key string, timeout int64) error {
 	r.key = key
 	var err error
 
 	for i := 0; i < r.retry; i++ {
-		err = r.lock(timeout)
+		err = r.lock(ops.TTL)
 		if err == nil {
-			return nil
+			break
 		}
 		log.Printf("redis lock err:%s,retry:%d", err.Error(), i)
 	}
 
-	return err
+	if !ops.DisableKeepAlive {
+		r.autoRenewal(ops.TTL)
+	}
+
+	return nil
 }
 
 func (r *redisLock) lock(timeout int64) error {
