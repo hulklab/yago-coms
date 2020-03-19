@@ -2,6 +2,7 @@ package lock
 
 import (
 	"sync"
+	"time"
 )
 
 const DefaultSessionTTL = 60
@@ -9,6 +10,7 @@ const DefaultSessionTTL = 60
 type SessionOptions struct {
 	TTL              int64
 	DisableKeepAlive bool
+	WaitTime         time.Duration
 }
 
 // SessionOption configures Session.
@@ -26,6 +28,14 @@ func WithTTL(ttl int64) SessionOption {
 func WithDisableKeepAlive() SessionOption {
 	return func(so *SessionOptions) {
 		so.DisableKeepAlive = true
+	}
+}
+
+func WithWaitTime(waitTime time.Duration) SessionOption {
+	return func(so *SessionOptions) {
+		if waitTime > 0 {
+			so.WaitTime = waitTime
+		}
 	}
 }
 

@@ -2,6 +2,7 @@ package etcd
 
 import (
 	"context"
+	"errors"
 	"log"
 	"sync"
 	"time"
@@ -43,17 +44,32 @@ type etcdLock struct {
 }
 
 func (e *etcdLock) Lock(key string, opts ...lock.SessionOption) error {
-	e.ctx = context.Background()
+	var ctx context.Context
+	ctx = context.Background()
 	ops := &lock.SessionOptions{TTL: lock.DefaultSessionTTL}
 	for _, opt := range opts {
 		opt(ops)
 	}
+
+	if ops.WaitTime > 0 {
+		var cancelFunc context.CancelFunc
+
+		ctx, cancelFunc = context.WithTimeout(context.Background(), ops.WaitTime)
+		defer cancelFunc()
+	}
+
+	e.ctx = ctx
+
 	var err error
 
 	for i := 0; i < e.retry; i++ {
 
 		err = e.lock(key, ops.TTL)
 		if err == nil {
+			break
+		}
+
+		if errors.Is(err, context.DeadlineExceeded) {
 			break
 		}
 

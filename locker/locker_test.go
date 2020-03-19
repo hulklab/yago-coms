@@ -1,6 +1,8 @@
 package locker
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -15,7 +17,7 @@ import (
 
 // go test -v . -args "-c=${APP_PATH}/app.toml"
 
-func TestRedis(t *testing.T) {
+func initRedis() {
 	yago.Config.Set("locker", g.Hash{
 		"driver":             "redis",
 		"driver_instance_id": "redis",
@@ -24,20 +26,49 @@ func TestRedis(t *testing.T) {
 		"addr": "127.0.0.1:6379",
 	})
 
+}
+
+func initEtcd() {
+	yago.Config.Set("locker", g.Hash{
+		"driver":             "etcd",
+		"driver_instance_id": "etcd",
+	})
+	yago.Config.Set("etcd", g.Hash{
+		"endpoints": []string{"127.0.0.1:2379"},
+	})
+
+}
+func TestRedis(t *testing.T) {
+	initRedis()
 	doTest()
 }
 
 func TestRedisForever(t *testing.T) {
-	yago.Config.Set("locker", g.Hash{
-		"driver":             "redis",
-		"driver_instance_id": "redis",
-		"retry":              1,
-	})
-	yago.Config.Set("redis", g.Hash{
-		"addr": "127.0.0.1:6379",
-	})
+	initRedis()
+	doTestForever()
+}
+
+func TestRedisWaitTime(t *testing.T) {
+	initRedis()
+	doTestWaitTime()
+}
+
+func TestEtcd(t *testing.T) {
+	initEtcd()
+
+	doTest()
+}
+
+func TestEtcdForever(t *testing.T) {
+	initEtcd()
 
 	doTestForever()
+}
+
+func TestEtcdWaitTime(t *testing.T) {
+	initEtcd()
+
+	doTestWaitTime()
 }
 
 func doTest() {
@@ -117,26 +148,36 @@ func doTestForever() {
 	r2.Unlock()
 }
 
-func TestEtcd(t *testing.T) {
-	yago.Config.Set("locker", g.Hash{
-		"driver":             "etcd",
-		"driver_instance_id": "etcd",
-	})
-	yago.Config.Set("etcd", g.Hash{
-		"endpoints": []string{"127.0.0.1:2379"},
-	})
+func doTestWaitTime() {
+	key := "lock_test_wait_time"
 
-	doTest()
-}
+	go func() {
+		r1 := New()
+		err := r1.Lock(key, lock.WithWaitTime(time.Second*10))
+		if err != nil {
+			fmt.Println("get wait time lock in fun1 err", err.Error())
+			return
+		}
+		defer r1.Unlock()
+		fmt.Println("get wait time lock in fun1")
+		for i := 0; i < 10; i++ {
+			fmt.Println("fun1:", i)
+			time.Sleep(1 * time.Second)
+		}
+	}()
 
-func TestEtcdForever(t *testing.T) {
-	yago.Config.Set("locker", g.Hash{
-		"driver":             "etcd",
-		"driver_instance_id": "etcd",
-	})
-	yago.Config.Set("etcd", g.Hash{
-		"endpoints": []string{"127.0.0.1:2379"},
-	})
+	time.Sleep(2 * time.Second)
+	r2 := New()
+	err := r2.Lock(key, lock.WithWaitTime(time.Second*2))
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			fmt.Println("wait time out and then return")
+			return
+		}
+		fmt.Println("get wait time lock in fun2 err:", err.Error())
+		return
+	}
 
-	doTestForever()
+	fmt.Println("get wait time lock in fun2")
+	r2.Unlock()
 }
