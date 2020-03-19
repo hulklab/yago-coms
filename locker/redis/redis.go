@@ -16,6 +16,7 @@ type redisLock struct {
 	retry   int
 	key     string
 	expired int64
+	done    chan struct{}
 }
 
 func init() {
@@ -34,19 +35,59 @@ func init() {
 	})
 }
 
-func (r *redisLock) Lock(key string, timeout int64) error {
+func (r *redisLock) autoRenewal(ttl int64) {
+	r.done = make(chan struct{})
+
+	go func() {
+		ticker := time.NewTicker(time.Duration(ttl) * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-r.done:
+				return
+			case <-ticker.C:
+				expired := r.expired + ttl
+				ok, err := redis.String(r.rIns.Set(r.key, expired, "XX"))
+
+				if err != nil {
+					log.Printf("lock renewal err: %s\n", err.Error())
+					break
+				} else if len(ok) == 0 {
+					//  续约失败
+					log.Printf("lock renewal fail: key %s is not exists", r.key)
+					break
+				}
+
+				r.expired = expired
+			}
+		}
+	}()
+
+}
+
+func (r *redisLock) Lock(key string, opts ...lock.SessionOption) error {
+	ops := &lock.SessionOptions{TTL: lock.DefaultSessionTTL}
+	for _, opt := range opts {
+		opt(ops)
+	}
+
 	r.key = key
 	var err error
 
 	for i := 0; i < r.retry; i++ {
-		err = r.lock(timeout)
+		err = r.lock(ops.TTL)
 		if err == nil {
-			return nil
+			break
 		}
 		log.Printf("redis lock err:%s,retry:%d", err.Error(), i)
 	}
 
-	return err
+	if !ops.DisableKeepAlive {
+		r.autoRenewal(ops.TTL)
+	}
+
+	return nil
 }
 
 func (r *redisLock) lock(timeout int64) error {
@@ -56,16 +97,21 @@ func (r *redisLock) lock(timeout int64) error {
 		r.expired = t
 
 		// key 不存在
-		lock, err := redis.Int(r.rIns.SetNx(r.key, t))
+		lo, err := redis.Int(r.rIns.SetNx(r.key, t))
 		if err != nil {
 			return err
 		}
-		if lock == 1 {
+		if lo == 1 {
 			break
 		}
 
 		// key 已经超时，并且 getset 获取任务超时
-		val, err := redis.Int64(r.rIns.Get(r.key))
+		reply, err := r.rIns.Get(r.key)
+		if reply == nil && err == nil {
+			continue
+		}
+
+		val, err := redis.Int64(reply, err)
 		if err != nil {
 			return err
 		}
@@ -94,6 +140,9 @@ func (r *redisLock) lock(timeout int64) error {
 }
 
 func (r *redisLock) Unlock() {
+	if r.done != nil {
+		r.done <- struct{}{}
+	}
 	val, _ := redis.Int64(r.rIns.Get(r.key))
 	if val > 0 && val == r.expired {
 		_, _ = r.rIns.Del(r.key)

@@ -1,11 +1,38 @@
 package lock
 
-import "sync"
+import (
+	"sync"
+)
+
+const DefaultSessionTTL = 60
+
+type SessionOptions struct {
+	TTL              int64
+	DisableKeepAlive bool
+}
+
+// SessionOption configures Session.
+type SessionOption func(*SessionOptions)
+
+// If TTL is <= 0, the default 60 seconds TTL will be used.
+func WithTTL(ttl int64) SessionOption {
+	return func(so *SessionOptions) {
+		if ttl > 0 {
+			so.TTL = ttl
+		}
+	}
+}
+
+func WithDisableKeepAlive() SessionOption {
+	return func(so *SessionOptions) {
+		so.DisableKeepAlive = true
+	}
+}
 
 var locks sync.Map
 
 type ILocker interface {
-	Lock(key string, timeout int64) error
+	Lock(key string, opts ...SessionOption) error
 	Unlock()
 }
 

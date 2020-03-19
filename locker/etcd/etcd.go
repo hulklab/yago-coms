@@ -42,12 +42,17 @@ type etcdLock struct {
 	mutex *concurrency.Mutex
 }
 
-func (e *etcdLock) Lock(key string, timeout int64) error {
+func (e *etcdLock) Lock(key string, opts ...lock.SessionOption) error {
 	e.ctx = context.Background()
+	ops := &lock.SessionOptions{TTL: lock.DefaultSessionTTL}
+	for _, opt := range opts {
+		opt(ops)
+	}
 	var err error
 
 	for i := 0; i < e.retry; i++ {
-		err = e.lock(key)
+
+		err = e.lock(key, ops.TTL)
 		if err == nil {
 			break
 		}
@@ -59,15 +64,22 @@ func (e *etcdLock) Lock(key string, timeout int64) error {
 		return err
 	}
 
-	go func() {
-		<-time.After(time.Duration(timeout) * time.Second)
-		e.Unlock()
-	}()
+	if ops.DisableKeepAlive {
+		go func() {
+			<-time.After(time.Duration(ops.TTL) * time.Second)
+			e.Unlock()
+		}()
+	}
 	return nil
 }
 
-func (e *etcdLock) lock(key string) error {
-	session, err := concurrency.NewSession(e.eIns.Client)
+func (e *etcdLock) lock(key string, ttl int64) error {
+	response, err := e.eIns.Client.Grant(e.ctx, ttl)
+	if err != nil {
+		return err
+	}
+
+	session, err := concurrency.NewSession(e.eIns.Client, concurrency.WithLease(response.ID))
 	if err != nil {
 		return err
 	}
