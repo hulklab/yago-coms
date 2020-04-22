@@ -107,7 +107,7 @@ func (r *redisLock) Lock(key string, opts ...lock.SessionOption) error {
 		r.autoRenewal(ops.TTL)
 	}
 
-	return nil
+	return err
 }
 
 func (r *redisLock) lock(timeout int64) error {
